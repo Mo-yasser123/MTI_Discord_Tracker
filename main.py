@@ -13,7 +13,10 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 UNI_USER = os.getenv('UNI_USER')
 UNI_PASS = os.getenv('UNI_PASS')
-CHANNEL_ID = int(os.getenv('CHANNEL_ID'))
+
+# تأمين جلب الـ ID لتفادي الخطأ إذا كان المتغير فارغاً
+channel_id_env = os.getenv('CHANNEL_ID')
+CHANNEL_ID = int(channel_id_env) if channel_id_env else 0
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -21,9 +24,10 @@ bot = discord.Client(intents=intents)
 
 def load_sent_events():
     try:
-       with open('sent_events.json', 'r', encoding='utf-8-sig') as f:
+        with open('sent_events.json', 'r', encoding='utf-8-sig') as f:
             return json.load(f)
-    except FileNotFoundError:
+    # هنا الإصلاح الجوهري: التقاط خطأ الـ JSONDecodeError
+    except (FileNotFoundError, json.JSONDecodeError):
         return []
 
 def save_sent_event(event_id):
@@ -111,9 +115,14 @@ async def on_ready():
             embeds.append(embed)
         
         await channel.send(content="@everyone 🚨 **تكليفات جديدة ظهرت على المنصة!**", embeds=embeds)
+        print("Message and Embeds sent successfully.")
     else:
         print("No new assignments.")
         
-    await bot.close() # السطر ده هو اللي بيخلي السيرفر ميعلقش
+    await bot.close()
 
-bot.run(TOKEN)
+if __name__ == "__main__":
+    if TOKEN and CHANNEL_ID:
+        bot.run(TOKEN)
+    else:
+        print("Error: Missing DISCORD_TOKEN or CHANNEL_ID in GitHub Secrets.")
