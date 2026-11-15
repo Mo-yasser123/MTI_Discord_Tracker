@@ -14,7 +14,6 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 UNI_USER = os.getenv('UNI_USER')
 UNI_PASS = os.getenv('UNI_PASS')
 
-# تأمين جلب الـ ID لتفادي الخطأ إذا كان المتغير فارغاً
 channel_id_env = os.getenv('CHANNEL_ID')
 CHANNEL_ID = int(channel_id_env) if channel_id_env else 0
 
@@ -26,7 +25,6 @@ def load_sent_events():
     try:
         with open('sent_events.json', 'r', encoding='utf-8-sig') as f:
             return json.load(f)
-    # هنا الإصلاح الجوهري: التقاط خطأ الـ JSONDecodeError
     except (FileNotFoundError, json.JSONDecodeError):
         return []
 
@@ -94,7 +92,7 @@ async def on_ready():
         embeds = []
         for event in upcoming_events:
             course_name = event['title']
-            task_type = "تحديث جامعي"
+            task_type = "Academic Update"
             
             if "-" in course_name:
                 parts = course_name.split("-")
@@ -102,19 +100,19 @@ async def on_ready():
                 task_type = parts[1].strip()
 
             embed = discord.Embed(
-                title=f"📝 {task_type}",
-                description=f"**المادة:** `{course_name}`",
-                url="https://elearning-01.mti.edu.eg/",
-                color=0x2ecc71
+                title=f"📘 New {task_type}",
+                description=f"A new update has been posted on the university portal.\n\n**📚 Course:** `{course_name}`\n**⏳ Deadline:** `{event['date']}`\n\n🔗 **[Access MTI Moodle Portal](https://elearning-01.mti.edu.eg/)**",
+                color=0x000080 # درجة اللون الكحلي Navy Blue
             )
-            embed.set_author(name="إشعار MTI Moodle", icon_url="https://cdn-icons-png.flaticon.com/512/3135/3135715.png")
-            embed.add_field(name="⏳ الموعد النهائي (Deadline)", value=f"> {event['date']}", inline=False)
-            embed.set_footer(text="CS Department Tracker", icon_url="https://cdn-icons-png.flaticon.com/512/2948/2948062.png")
+            embed.set_author(name="Automated Academic Tracker", icon_url="https://cdn-icons-png.flaticon.com/512/3135/3135715.png")
+            # إضافة اسم السيرفر الخاص بك بشكل احترافي في التذييل
+            embed.set_footer(text="M7md's Educational server | CS Dept.", icon_url="https://cdn-icons-png.flaticon.com/512/2948/2948062.png")
             embed.timestamp = datetime.datetime.now(datetime.timezone.utc)
             
             embeds.append(embed)
         
-        await channel.send(content="@everyone 🚨 **تكليفات جديدة ظهرت على المنصة!**", embeds=embeds)
+        # الرسالة الافتتاحية بالإنجليزية
+        await channel.send(content="@everyone 📢 **New Academic Updates Available!**", embeds=embeds)
         print("Message and Embeds sent successfully.")
     else:
         print("No new assignments.")
