@@ -1,4 +1,4 @@
-name: MTI Scraper Bot
+name: MTI Scraper Bot (Discord)
 
 on:
   schedule:
