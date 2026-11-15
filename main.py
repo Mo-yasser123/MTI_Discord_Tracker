@@ -1,5 +1,4 @@
 import discord
-from discord.ext import commands, tasks
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -18,7 +17,7 @@ CHANNEL_ID = int(os.getenv('CHANNEL_ID'))
 
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = discord.Client(intents=intents) # استخدمنا Client عادي بدل Bot لأنه هيشتغل مرة ويقفل
 
 def load_sent_events():
     try:
@@ -39,6 +38,7 @@ def scrape_moodle():
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage") # ضروري جداً لسيرفرات جيت هاب
     chrome_options.add_argument("--window-size=1920,1080")
     
     driver = webdriver.Chrome(options=chrome_options)
@@ -74,18 +74,19 @@ def scrape_moodle():
         
     return new_events
 
-@tasks.loop(hours=3)
-async def check_university_site():
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user}')
     channel = bot.get_channel(CHANNEL_ID)
+    
     if not channel:
-        print("Error: Channel not found. Please verify CHANNEL_ID in .env file.")
+        print("Channel not found.")
+        await bot.close()
         return
 
-    print("Checking university website for new assignments...")
     upcoming_events = scrape_moodle()
     
     if upcoming_events:
-        print(f"Found {len(upcoming_events)} new assignments. Sending to Discord...")
         embeds = []
         for event in upcoming_events:
             course_name = event['title']
@@ -111,15 +112,8 @@ async def check_university_site():
         
         await channel.send(content="@everyone 🚨 **تكليفات جديدة ظهرت على المنصة!**", embeds=embeds)
     else:
-        print("Scraping finished. No new assignments found at this time.")
-
-@bot.event
-async def on_ready():
-    await bot.change_presence(
-        status=discord.Status.dnd, 
-        activity=discord.Activity(type=discord.ActivityType.watching, name="MTI LMS | 24/7")
-    )
-    print(f'Bot is online as {bot.user} (DND Mode)')
-    check_university_site.start()
+        print("No new assignments.")
+        
+    await bot.close() # قفل البوت بعد إنهاء المهمة عشان جيت هاب يقفل السيرفر
 
 bot.run(TOKEN)
