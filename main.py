@@ -17,7 +17,7 @@ CHANNEL_ID = int(os.getenv('CHANNEL_ID'))
 
 intents = discord.Intents.default()
 intents.message_content = True
-bot = discord.Client(intents=intents) # استخدمنا Client عادي بدل Bot لأنه هيشتغل مرة ويقفل
+bot = discord.Client(intents=intents)
 
 def load_sent_events():
     try:
@@ -38,7 +38,7 @@ def scrape_moodle():
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage") # ضروري جداً لسيرفرات جيت هاب
+    chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--window-size=1920,1080")
     
     driver = webdriver.Chrome(options=chrome_options)
@@ -114,6 +114,6 @@ async def on_ready():
     else:
         print("No new assignments.")
         
-    await bot.close() # قفل البوت بعد إنهاء المهمة عشان جيت هاب يقفل السيرفر
+    await bot.close() # السطر ده هو اللي بيخلي السيرفر ميعلقش
 
 bot.run(TOKEN)
