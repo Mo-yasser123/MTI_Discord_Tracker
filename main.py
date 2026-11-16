@@ -1,4 +1,4 @@
-import discord
+import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -7,32 +7,25 @@ from selenium.webdriver.support import expected_conditions as EC
 import os
 import json
 import time
-import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
-TOKEN = os.getenv('DISCORD_TOKEN')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+CHAT_ID = os.getenv('CHAT_ID')
 UNI_USER = os.getenv('UNI_USER')
 UNI_PASS = os.getenv('UNI_PASS')
 
-channel_id_env = os.getenv('CHANNEL_ID')
-CHANNEL_ID = int(channel_id_env) if channel_id_env else 0
-
-intents = discord.Intents.default()
-intents.message_content = True
-bot = discord.Client(intents=intents)
-
 def get_professor_name(course_name):
     name_lower = course_name.lower()
-    if "english" in name_lower:
+    if "english language" in name_lower:
         return "Dr. Rasha Saeed"
-    elif "programming" in name_lower or "cs-112" in name_lower:
+    elif "introduction to programming" in name_lower:
         return "Dr. HAFEZ M.S. ABDEL-WAHAB"
-    elif "computer science" in name_lower or "cs-111" in name_lower:
+    elif "introduction to computer science" in name_lower:
         return "Dr. Mohamed M. Elgazzar"
     elif "linear algebra" in name_lower:
         return "Walid Basiony"
-    elif "analysis" in name_lower or "mathematical" in name_lower:
+    elif "mathematical analysis" in name_lower:
         return "Dr. Rania Ahmed"
     elif "entrepreneur" in name_lower:
         return "Dr. El-sayed Orabi"
@@ -116,58 +109,49 @@ def scrape_moodle():
         
     return new_events
 
-@bot.event
-async def on_ready():
-    print(f'Logged in as {bot.user}')
-    channel = bot.get_channel(CHANNEL_ID)
-    
-    if not channel:
-        print("Channel not found.")
-        await bot.close()
-        return
-
-    upcoming_events = scrape_moodle()
-    
-    if upcoming_events:
-        embeds = []
-        for event in upcoming_events:
-            raw_title = event['raw_title']
-            course_name = "Check Link For Details"
-            task_name = raw_title
-            
-            if "-" in raw_title:
-                parts = raw_title.split("-", 1)
-                course_name = parts[0].replace("F26", "").strip()
-                task_name = parts[1].strip()
-            elif " is due" in raw_title:
-                task_name = raw_title.replace(" is due", "").strip()
-
-            professor = get_professor_name(course_name)
-
-            embed = discord.Embed(
-                title=f"📘 New {task_name}",
-                description=f"A new update has been posted on the university portal.\n\n🔗 **[Access Assignment Directly]({event['link']})**",
-                color=0x000080
-            )
-            embed.set_author(name="Automated Academic Tracker", icon_url="https://cdn-icons-png.flaticon.com/512/3135/3135715.png")
-            embed.add_field(name="📚 Course", value=f"`{course_name}`", inline=True)
-            embed.add_field(name="👨‍🏫 Professor", value=f"`{professor}`", inline=True)
-            embed.add_field(name="⏳ Deadline", value=f"> {event['date']}", inline=False)
-            embed.set_footer(text="M7md's Educational server | CS Dept.", icon_url="https://cdn-icons-png.flaticon.com/512/2948/2948062.png")
-            embed.timestamp = datetime.datetime.now(datetime.timezone.utc)
-            
-            embeds.append(embed)
+def send_telegram_message(events):
+    for event in events:
+        raw_title = event['raw_title']
+        course_name = "Check Link For Details"
+        task_name = raw_title
         
-        await channel.send(content="@everyone 📢 **New Academic Updates Available!**", embeds=embeds)
-        print("Message and Embeds sent successfully.")
-    else:
-        print("No new assignments.")
+        if "-" in raw_title:
+            parts = raw_title.split("-", 1)
+            course_name = parts[0].replace("F26", "").strip()
+            task_name = parts[1].strip()
+        elif " is due" in raw_title:
+            task_name = raw_title.replace(" is due", "").strip()
+
+        professor = get_professor_name(course_name)
+
+        message = f"🚨 <b>New Academic Update</b>\n\n"
+        message += f"📚 <b>Course:</b> <code>{course_name}</code>\n"
+        message += f"👨‍🏫 <b>Professor:</b> {professor}\n"
+        message += f"📝 <b>Task:</b> {task_name}\n"
+        message += f"⏳ <b>Deadline:</b> {event['date']}\n\n"
+        message += f"🔗 <a href='{event['link']}'><b>Click here to view details</b></a>"
+
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": CHAT_ID,
+            "text": message,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True
+        }
         
-    await bot.close()
+        try:
+            response = requests.post(url, json=payload)
+            if response.status_code == 200:
+                print(f"Successfully sent: {task_name}")
+            else:
+                print(f"Failed to send: {response.text}")
+        except Exception as e:
+            print(f"Telegram API error: {e}")
 
 if __name__ == "__main__":
-    print("Starting MTI Discord Scraper...")
-    if TOKEN and CHANNEL_ID:
-        bot.run(TOKEN)
+    print("Starting MTI Telegram Scraper...")
+    upcoming_events = scrape_moodle()
+    if upcoming_events:
+        send_telegram_message(upcoming_events)
     else:
-        print("Error: Missing DISCORD_TOKEN or CHANNEL_ID in GitHub Secrets.")
+        print("No new events found.")
