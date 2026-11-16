@@ -4,6 +4,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 import os
 import json
 import time
@@ -79,7 +81,6 @@ def scrape_moodle():
         
         saved_events = load_sent_events()
         
-        # حلقة تعتمد على الفهرس لتفادي مشاكل إعادة تحميل العناصر بعد فتح النافذة
         for i in range(len(events)):
             try:
                 current_events = driver.find_elements(By.CLASS_NAME, "event")
@@ -102,37 +103,42 @@ def scrape_moodle():
                 event_id = f"{raw_title}_{date_time}"
                 
                 if event_id not in saved_events:
-                    # فتح النافذة المنبثقة للحدث
                     driver.execute_script("arguments[0].click();", title_el)
                     time.sleep(2)
                     
-                    course_name = "Not Found"
+                    course_name = None
                     description = ""
                     
                     try:
-                        modal = driver.find_element(By.CLASS_NAME, "modal-content")
-                        links = modal.find_elements(By.TAG_NAME, "a")
-                        for link in links:
-                            link_text = link.get_attribute("textContent").strip()
-                            if link_text and link_text != raw_title and "http" not in link_text:
-                                course_name = link_text
+                        modals = driver.find_elements(By.CLASS_NAME, "modal-content")
+                        active_modal = None
+                        for m in modals:
+                            if m.is_displayed():
+                                active_modal = m
                                 break
                         
-                        desc_elements = modal.find_elements(By.CLASS_NAME, "description-content")
-                        if desc_elements:
-                             description = desc_elements[0].get_attribute("textContent").strip()
+                        if active_modal:
+                            desc_elements = active_modal.find_elements(By.CLASS_NAME, "description-content")
+                            if desc_elements:
+                                raw_desc = desc_elements[0].get_attribute("textContent").strip()
+                                description = " ".join(raw_desc.split())
+                            
+                            links = active_modal.find_elements(By.TAG_NAME, "a")
+                            for link in links:
+                                href = link.get_attribute("href")
+                                if href and "course/view.php" in href:
+                                    course_name = link.get_attribute("textContent").strip()
+                                    break
+                                
                     except Exception as modal_e:
                         print(f"Could not parse modal for {raw_title}: {modal_e}")
                     
-                    # إغلاق النافذة للمتابعة للحدث التالي
                     try:
-                         close_btn = driver.find_element(By.CSS_SELECTOR, "button.close, button.btn-close, [data-dismiss='modal'], [data-bs-dismiss='modal']")
-                         driver.execute_script("arguments[0].click();", close_btn)
-                         time.sleep(1)
-                    except Exception:
-                         print("Could not close modal, refreshing page.")
-                         driver.refresh()
-                         time.sleep(5)
+                        ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+                        time.sleep(1)
+                    except:
+                        driver.refresh()
+                        time.sleep(5)
 
                     new_events.append({
                         "raw_title": raw_title, 
@@ -172,8 +178,7 @@ async def on_ready():
             raw_title = event['raw_title']
             task_name = raw_title
             
-            # تحديد اسم المادة
-            if event.get("course_name_from_modal") and event["course_name_from_modal"] != "Not Found":
+            if event.get("course_name_from_modal"):
                 course_name = event["course_name_from_modal"]
             elif "-" in raw_title:
                  parts = raw_title.split("-", 1)
@@ -197,9 +202,8 @@ async def on_ready():
             embed.add_field(name="👨‍🏫 Professor", value=f"`{professor}`", inline=True)
             embed.add_field(name="⏳ Deadline", value=f"> {event['date']}", inline=False)
             
-            # إضافة الوصف المخفي إن وُجد
             if event.get("description"):
-                desc = " ".join(event["description"].split())
+                desc = event["description"]
                 if len(desc) > 200:
                     desc = desc[:197] + "..."
                 embed.add_field(name="ℹ️ Details", value=f"*{desc}*", inline=False)
