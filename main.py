@@ -79,8 +79,12 @@ def scrape_moodle():
         
         saved_events = load_sent_events()
         
-        for event in events:
+        # حلقة تعتمد على الفهرس لتفادي مشاكل إعادة تحميل العناصر بعد فتح النافذة
+        for i in range(len(events)):
             try:
+                current_events = driver.find_elements(By.CLASS_NAME, "event")
+                event = current_events[i]
+                
                 title_el = event.find_element(By.CSS_SELECTOR, "a.text-truncate")
                 raw_title = title_el.get_attribute("title")
                 if not raw_title:
@@ -98,11 +102,45 @@ def scrape_moodle():
                 event_id = f"{raw_title}_{date_time}"
                 
                 if event_id not in saved_events:
+                    # فتح النافذة المنبثقة للحدث
+                    driver.execute_script("arguments[0].click();", title_el)
+                    time.sleep(2)
+                    
+                    course_name = "Not Found"
+                    description = ""
+                    
+                    try:
+                        modal = driver.find_element(By.CLASS_NAME, "modal-content")
+                        links = modal.find_elements(By.TAG_NAME, "a")
+                        for link in links:
+                            link_text = link.get_attribute("textContent").strip()
+                            if link_text and link_text != raw_title and "http" not in link_text:
+                                course_name = link_text
+                                break
+                        
+                        desc_elements = modal.find_elements(By.CLASS_NAME, "description-content")
+                        if desc_elements:
+                             description = desc_elements[0].get_attribute("textContent").strip()
+                    except Exception as modal_e:
+                        print(f"Could not parse modal for {raw_title}: {modal_e}")
+                    
+                    # إغلاق النافذة للمتابعة للحدث التالي
+                    try:
+                         close_btn = driver.find_element(By.CSS_SELECTOR, "button.close, button.btn-close, [data-dismiss='modal'], [data-bs-dismiss='modal']")
+                         driver.execute_script("arguments[0].click();", close_btn)
+                         time.sleep(1)
+                    except Exception:
+                         print("Could not close modal, refreshing page.")
+                         driver.refresh()
+                         time.sleep(5)
+
                     new_events.append({
                         "raw_title": raw_title, 
                         "date": date_time, 
                         "link": event_link,
-                        "id": event_id
+                        "id": event_id,
+                        "course_name_from_modal": course_name,
+                        "description": description
                     })
                     save_sent_event(event_id)
             except Exception as inner_e:
@@ -132,14 +170,19 @@ async def on_ready():
         embeds = []
         for event in upcoming_events:
             raw_title = event['raw_title']
-            course_name = "Check Link For Details"
             task_name = raw_title
             
-            if "-" in raw_title:
-                parts = raw_title.split("-", 1)
-                course_name = parts[0].replace("F26", "").strip()
-                task_name = parts[1].strip()
-            elif " is due" in raw_title:
+            # تحديد اسم المادة
+            if event.get("course_name_from_modal") and event["course_name_from_modal"] != "Not Found":
+                course_name = event["course_name_from_modal"]
+            elif "-" in raw_title:
+                 parts = raw_title.split("-", 1)
+                 course_name = parts[0].replace("F26", "").strip()
+                 task_name = parts[1].strip()
+            else:
+                course_name = "Check Link For Details"
+
+            if " is due" in raw_title:
                 task_name = raw_title.replace(" is due", "").strip()
 
             professor = get_professor_name(course_name)
@@ -153,6 +196,14 @@ async def on_ready():
             embed.add_field(name="📚 Course", value=f"`{course_name}`", inline=True)
             embed.add_field(name="👨‍🏫 Professor", value=f"`{professor}`", inline=True)
             embed.add_field(name="⏳ Deadline", value=f"> {event['date']}", inline=False)
+            
+            # إضافة الوصف المخفي إن وُجد
+            if event.get("description"):
+                desc = " ".join(event["description"].split())
+                if len(desc) > 200:
+                    desc = desc[:197] + "..."
+                embed.add_field(name="ℹ️ Details", value=f"*{desc}*", inline=False)
+
             embed.set_footer(text="M7md's Educational server | CS Dept.", icon_url="https://cdn-icons-png.flaticon.com/512/2948/2948062.png")
             embed.timestamp = datetime.datetime.now(datetime.timezone.utc)
             
